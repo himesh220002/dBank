@@ -16,7 +16,7 @@ import Iter "mo:base/Iter";
  * Handles core banking operations including:
  * - Interest-bearing accounts with continuous compounding.
  * - Goal-based savings and EMI (Equated Monthly Installment) management.
- * - Multi-version state migration to ensure data persistence across upgrades.
+ * - Data persistence across upgrades using transient-to-stable backup patterns.
  * - Investment system for buying/selling assets with Delta tokens.
  *
  * Developer Note: This actor uses stable storage for persistence and transient
@@ -33,59 +33,12 @@ persistent actor DBank {
    */
   public type GoalType = { #Savings; #EMI };
 
-  // --- Legacy Data Structure Definitions (V1) ---
-  // Maintained for backward compatibility during post-upgrade migrations.
-  type TransactionV1 = {
-    id : Text;
-    op : Text;
-    amount : Float;
-    balance : Float;
-    time : Int;
-    memo : Text;
-    ext : ?Text;
-  };
-  type GoalV1 = {
-    id : Nat;
-    name : Text;
-    gType : GoalType;
-    targetAmount : Float;
-    currentAmount : Float;
-    pendingInterest : Float;
-    lastUpdate : Int;
-    lockedUntil : Int;
-    interestRate : Float;
-    dueDate : Int;
-    monthlyCommitment : Float;
-    paidAmount : Float;
-    ext : ?Text;
-  };
-  type CompletedGoalV1 = {
-    name : Text;
-    amount : Float;
-    targetAmount : Float;
-    paidAmount : Float;
-    gType : GoalType;
-    completionDate : Int;
-  };
-  type MigrationStateV1 = {
-    currentValue : Float;
-    pendingInterest : Float;
-    txs : [TransactionV1];
-    lastUpdateTimestamp : Int;
-    lastCompoundTimestamp : Int;
-    nextTxId : Nat;
-    nextGoalId : Nat;
-    goals : [GoalV1];
-    completedGoals : [CompletedGoalV1];
-    annualRate : Float;
-  };
-
-  // --- Current Data Structures (V3) ---
+  // --- Data Structures ---
   // The latest schema for transactions and goals, including enhanced tracking fields.
   public type GoalStatus = { #Active; #Paused; #Achieved; #Archived };
 
   /**
-   * Transaction schema for V3.
+   * Transaction schema.
    * Includes category and tags for better financial reporting and analytics.
    */
   public type Transaction = {
@@ -165,66 +118,16 @@ persistent actor DBank {
     holdings : [AssetHolding]; // Assets owned
   };
 
-  // --- Intermediate Legacy Types (V2) ---
-  // Intermediate versions used during rapid development phases.
-  type TransactionV2_Old = {
-    id : Text;
-    op : Text;
-    amount : Float;
-    balance : Float;
-    time : Int;
-    memo : Text;
-    ext : ?Text;
-  };
-
-  type GoalV2_Old = {
-    id : Nat;
-    name : Text;
-    gType : GoalType;
-    targetAmount : Float;
-    currentAmount : Float;
-    pendingInterest : Float;
-    lastUpdate : Int;
-    lockedUntil : Int;
-    interestRate : Float;
-    dueDate : Int;
-    monthlyCommitment : Float;
-    paidAmount : Float;
-    ext : ?Text;
-  };
-
-  type CompletedGoalV2_Old = {
-    name : Text;
-    amount : Float;
-    targetAmount : Float;
-    paidAmount : Float;
-    gType : GoalType;
-    completionDate : Int;
-  };
-
-  type MigrationStateV2 = {
+  type MigrationState = {
     currentValue : Float;
     pendingInterest : Float;
-    txsV3 : [TransactionV2_Old];
+    transactions : [Transaction];
     lastUpdateTimestamp : Int;
     lastCompoundTimestamp : Int;
     nextTxId : Nat;
     nextGoalId : Nat;
-    goalsV3 : [GoalV2_Old];
-    completedGoalsV3 : [CompletedGoalV2_Old];
-    annualRate : Float;
-  };
-
-  type MigrationStateV3 = {
-    currentValue : Float;
-    pendingInterest : Float;
-    txsV3 : [Transaction];
-    lastUpdateTimestamp : Int;
-    lastCompoundTimestamp : Int;
-    nextTxId : Nat;
-    nextGoalId : Nat;
-    goalsV3 : [Goal];
-    completedGoalsV3 : [CompletedGoal];
+    goals : [Goal];
+    completedGoals : [CompletedGoal];
     annualRate : Float;
   };
 
@@ -246,103 +149,51 @@ persistent actor DBank {
   };
 
   // Active runtime state (Transient). Populated from stable backups during post-upgrade.
-  transient var txsV3 : [Transaction] = [];
-  transient var goalsV3 : [Goal] = [];
-  transient var completedGoalsV3 : [CompletedGoal] = [];
+  transient var transactions : [Transaction] = [];
+  transient var goals : [Goal] = [];
+  transient var completedGoals : [CompletedGoal] = [];
 
-  // Migration backup containers. Used to safely transport state during version shifts.
-  var upgradeBackup : ?MigrationStateV1 = null;
-  var upgradeBackupV2 : ?MigrationStateV2 = null;
-  var upgradeBackupV3 : ?MigrationStateV3 = null;
+  // State backup container used for data persistence during canister upgrades.
+  var upgradeBackup : ?MigrationState = null;
 
-  // --- System Migration Hooks ---
+  // --- System Upgrade Hooks ---
   /**
    * Pre-upgrade hook: Backs up the current transient state into stable variables.
    * This is critical because transient variables are cleared during upgrades.
    */
   system func preupgrade() {
-    upgradeBackupV3 := ?{
+    upgradeBackup := ?{
       currentValue = currentValue;
       pendingInterest = pendingInterest;
-      txsV3 = txsV3;
+      transactions = transactions;
       lastUpdateTimestamp = lastUpdateTimestamp;
       lastCompoundTimestamp = lastCompoundTimestamp;
       nextTxId = nextTxId;
       nextGoalId = nextGoalId;
-      goalsV3 = goalsV3;
-      completedGoalsV3 = completedGoalsV3;
+      goals = goals;
+      completedGoals = completedGoals;
       annualRate = annualRate;
     };
   };
 
   system func postupgrade() {
-    // Migration from V1 (Old)
+    // Restore state from upgrade backup
     switch (upgradeBackup) {
       case (?data) {
         currentValue := data.currentValue;
         pendingInterest := data.pendingInterest;
+        transactions := data.transactions;
         lastUpdateTimestamp := data.lastUpdateTimestamp;
         lastCompoundTimestamp := data.lastCompoundTimestamp;
         nextTxId := data.nextTxId;
         nextGoalId := data.nextGoalId;
+        goals := data.goals;
+        completedGoals := data.completedGoals;
         annualRate := data.annualRate;
-
-        // Migrate Transactions
-        txsV3 := Array.map<TransactionV1, Transaction>(data.txs, func(old) { { id = old.id; op = old.op; amount = old.amount; balance = old.balance; time = old.time; memo = old.memo; ext = old.ext; category = "General"; tags = [] } });
-
-        // Migrate Goals
-        goalsV3 := Array.map<GoalV1, Goal>(data.goals, func(old) { { id = old.id; name = old.name; gType = old.gType; targetAmount = old.targetAmount; currentAmount = old.currentAmount; pendingInterest = old.pendingInterest; lastUpdate = old.lastUpdate; lockedUntil = old.lockedUntil; interestRate = old.interestRate; dueDate = old.dueDate; monthlyCommitment = old.monthlyCommitment; paidAmount = old.paidAmount; ext = old.ext;
-        /* New Defaults */
-        status = #Active; category = "Savings"; priority = 1; nextDueDate = old.dueDate; frequency = 30 * 24 * 3600; penaltyRate = 0.0 } });
-
-        // Migrate CompletedGoals
-        completedGoalsV3 := Array.map<CompletedGoalV1, CompletedGoal>(data.completedGoals, func(old) { { name = old.name; amount = old.amount; targetAmount = old.targetAmount; paidAmount = old.paidAmount; gType = old.gType; completionDate = old.completionDate; category = "Savings" } });
       };
       case (null) {};
     };
     upgradeBackup := null;
-
-    // Recovery from V2 (Old)
-    switch (upgradeBackupV2) {
-      case (?data) {
-        currentValue := data.currentValue;
-        pendingInterest := data.pendingInterest;
-        lastUpdateTimestamp := data.lastUpdateTimestamp;
-        lastCompoundTimestamp := data.lastCompoundTimestamp;
-        nextTxId := data.nextTxId;
-        nextGoalId := data.nextGoalId;
-        annualRate := data.annualRate;
-
-        // Migrate Txs V2 -> V3
-        txsV3 := Array.map<TransactionV2_Old, Transaction>(data.txsV3, func(old) { { id = old.id; op = old.op; amount = old.amount; balance = old.balance; time = old.time; memo = old.memo; ext = old.ext; category = "General"; tags = [] } });
-
-        // Migrate Goals V2 -> V3
-        goalsV3 := Array.map<GoalV2_Old, Goal>(data.goalsV3, func(old) { { id = old.id; name = old.name; gType = old.gType; targetAmount = old.targetAmount; currentAmount = old.currentAmount; pendingInterest = old.pendingInterest; lastUpdate = old.lastUpdate; lockedUntil = old.lockedUntil; interestRate = old.interestRate; dueDate = old.dueDate; monthlyCommitment = old.monthlyCommitment; paidAmount = old.paidAmount; ext = old.ext; status = #Active; category = "Savings"; priority = 1; nextDueDate = old.dueDate; frequency = 30 * 24 * 3600; penaltyRate = 0.0 } });
-
-        // Migrate CompletedGoals V2 -> V3
-        completedGoalsV3 := Array.map<CompletedGoalV2_Old, CompletedGoal>(data.completedGoalsV3, func(old) { { name = old.name; amount = old.amount; targetAmount = old.targetAmount; paidAmount = old.paidAmount; gType = old.gType; completionDate = old.completionDate; category = "Savings" } });
-      };
-      case (null) {};
-    };
-    upgradeBackupV2 := null;
-
-    // Recovery from V3
-    switch (upgradeBackupV3) {
-      case (?data) {
-        currentValue := data.currentValue;
-        pendingInterest := data.pendingInterest;
-        txsV3 := data.txsV3;
-        lastUpdateTimestamp := data.lastUpdateTimestamp;
-        lastCompoundTimestamp := data.lastCompoundTimestamp;
-        nextTxId := data.nextTxId;
-        nextGoalId := data.nextGoalId;
-        goalsV3 := data.goalsV3;
-        completedGoalsV3 := data.completedGoalsV3;
-        annualRate := data.annualRate;
-      };
-      case (null) {};
-    };
-    upgradeBackupV3 := null;
   };
 
   // --- Private Utility Logic ---
@@ -376,10 +227,10 @@ persistent actor DBank {
   private func _updateGoalStatus(goalId : Nat, newStatus : GoalStatus) : Bool {
     var success = false;
     // We must use tabulate to update the immutable array
-    goalsV3 := Array.tabulate<Goal>(
-      goalsV3.size(),
+    goals := Array.tabulate<Goal>(
+      goals.size(),
       func(i) {
-        let g = goalsV3[i];
+        let g = goals[i];
         if (g.id == goalId) {
           success := true;
           return {
@@ -411,7 +262,7 @@ persistent actor DBank {
 
   /**
    * Internal helper to record a transaction entry.
-   * Prepends new transactions to the beginning of the txsV3 array for reverse-chronological display.
+   * Prepends new transactions to the beginning of the transactions array for reverse-chronological display.
    */
   private func _recordTransaction(op : Text, amount : Float, balance : Float, memo : Text, cat : Text, tgs : [Text]) : () {
     let entry : Transaction = {
@@ -426,7 +277,7 @@ persistent actor DBank {
       ext = null;
     };
     nextTxId += 1;
-    txsV3 := Array.append([entry], txsV3);
+    transactions := Array.append([entry], transactions);
   };
 
   /**
@@ -438,7 +289,7 @@ persistent actor DBank {
     let rate : Float = getRate(currentValue);
     let timeSinceLastUpdate = now - lastUpdateTimestamp;
 
-    var actualGoals = goalsV3;
+    var actualGoals = goals;
 
     if (timeSinceLastUpdate > 0) {
       let secondsPerYear : Int = 31536000;
@@ -446,7 +297,7 @@ persistent actor DBank {
 
       pendingInterest += currentValue * (Float.exp(rate * timeYears) - 1.0);
 
-      // Accrue for savings goalsV3
+      // Accrue for savings goals
       actualGoals := Array.tabulate<Goal>(
         actualGoals.size(),
         func(idx) {
@@ -492,7 +343,7 @@ persistent actor DBank {
         pendingInterest := 0;
       };
 
-      // Compounding for goalsV3
+      // Compounding for goals
       actualGoals := Array.tabulate<Goal>(
         actualGoals.size(),
         func(idx) {
@@ -524,7 +375,7 @@ persistent actor DBank {
       );
       lastCompoundTimestamp := now;
     };
-    goalsV3 := actualGoals;
+    goals := actualGoals;
   };
 
   // --- Public External Methods ---
@@ -538,7 +389,7 @@ persistent actor DBank {
     let b = Buffer.Buffer<Text>(100);
     b.add(header);
 
-    for (t in txsV3.vals()) {
+    for (t in transactions.vals()) {
       let tagsStr = Text.join(";", Iter.fromArray(t.tags));
       let line = t.id # "," #
       t.op # "," #
@@ -558,7 +409,9 @@ persistent actor DBank {
   public query func getCurrentValue() : async Float {
     return _getLiveBalance();
   };
-  public query func getTransactions() : async [Transaction] { return txsV3 };
+  public query func getTransactions() : async [Transaction] {
+    return transactions;
+  };
 
   public func deposit(amount : Float) : async Float {
     _realizeGains();
@@ -578,21 +431,21 @@ persistent actor DBank {
 
   /**
    * Closes a goal and refunds the current amount plus any pending interest to the main balance.
-   * The goal is then archived into the completedGoalsV3 list.
+   * The goal is then archived into the completedGoals list.
    */
   public func closeGoal(goalId : Nat) : async ?Float {
     _realizeGains();
     var foundIdx : ?Nat = null;
     var i = 0;
-    while (i < goalsV3.size()) {
-      if (goalsV3[i].id == goalId) { foundIdx := ?i; i := goalsV3.size() } else {
+    while (i < goals.size()) {
+      if (goals[i].id == goalId) { foundIdx := ?i; i := goals.size() } else {
         i += 1;
       };
     };
 
     switch (foundIdx) {
       case (?idx) {
-        let g = goalsV3[idx];
+        let g = goals[idx];
         let totalRefund = g.currentAmount + g.pendingInterest;
         currentValue += totalRefund;
         _recordTransaction("goal_liquidate", totalRefund, currentValue, g.name, g.category, ["Goal", "Liquidate"]);
@@ -606,15 +459,15 @@ persistent actor DBank {
           completionDate = Time.now();
           category = g.category;
         };
-        completedGoalsV3 := Array.append(completedGoalsV3, [archiveEntry]);
+        completedGoals := Array.append(completedGoals, [archiveEntry]);
 
-        if (goalsV3.size() == 1) {
-          goalsV3 := [];
+        if (goals.size() == 1) {
+          goals := [];
         } else {
-          goalsV3 := Array.tabulate<Goal>(
-            goalsV3.size() - 1,
+          goals := Array.tabulate<Goal>(
+            goals.size() - 1,
             func(j) {
-              if (j < idx) { goalsV3[j] } else { goalsV3[j + 1] };
+              if (j < idx) { goals[j] } else { goals[j + 1] };
             },
           );
         };
@@ -631,15 +484,15 @@ persistent actor DBank {
   public func deleteGoal(goalId : Nat) : async Bool {
     var foundIdx : ?Nat = null;
     var i = 0;
-    while (i < goalsV3.size()) {
-      if (goalsV3[i].id == goalId) { foundIdx := ?i; i := goalsV3.size() } else {
+    while (i < goals.size()) {
+      if (goals[i].id == goalId) { foundIdx := ?i; i := goals.size() } else {
         i += 1;
       };
     };
 
     switch (foundIdx) {
       case (?idx) {
-        let g = goalsV3[idx];
+        let g = goals[idx];
         if (g.currentAmount == 0.0) {
 
           // ARCHIVE BEFORE DELETE (Preserve History)
@@ -652,15 +505,15 @@ persistent actor DBank {
             completionDate = Time.now();
             category = g.category;
           };
-          completedGoalsV3 := Array.append(completedGoalsV3, [archiveEntry]);
+          completedGoals := Array.append(completedGoals, [archiveEntry]);
 
-          if (goalsV3.size() == 1) {
-            goalsV3 := [];
+          if (goals.size() == 1) {
+            goals := [];
           } else {
-            goalsV3 := Array.tabulate<Goal>(
-              goalsV3.size() - 1,
+            goals := Array.tabulate<Goal>(
+              goals.size() - 1,
               func(j) {
-                if (j < idx) { goalsV3[j] } else { goalsV3[j + 1] };
+                if (j < idx) { goals[j] } else { goals[j + 1] };
               },
             );
           };
@@ -678,8 +531,8 @@ persistent actor DBank {
     if (currentValue < amount) return null;
     var success = false;
     var goalName = "";
-    let oldGoals = goalsV3;
-    goalsV3 := Array.tabulate<Goal>(
+    let oldGoals = goals;
+    goals := Array.tabulate<Goal>(
       oldGoals.size(),
       func(i) {
         let og = oldGoals[i];
@@ -717,20 +570,20 @@ persistent actor DBank {
     if (success) {
       // Determine Op based on Type: 'goal_fund' vs 'emi_fund'
       // We look up the Goal Type first (we have to find it again or capture it in loop)
-      // Optimization: Captured in `oldGoals` scan, but `goalsV3 := tabulate` makes it tricky to extract cleanly without re-looping or var.
-      // Since we just updated `goalsV3`, let's find the type.
+      // Optimization: Captured in `oldGoals` scan, but `goals := tabulate` makes it tricky to extract cleanly without re-looping or var.
+      // Since we just updated `goals`, let's find the type.
       // Or simpler: tabulate loop is fast, but we can't extract easily.
       // Let's rely on finding it again or just look at `goalId` properties if stored? No.
       // Let's re-find to be safe and clean, overhead is minimal for small N.
       var isEMI = false;
       var k = 0;
-      while (k < goalsV3.size()) {
-        if (goalsV3[k].id == goalId) {
-          switch (goalsV3[k].gType) {
+      while (k < goals.size()) {
+        if (goals[k].id == goalId) {
+          switch (goals[k].gType) {
             case (#EMI) { isEMI := true };
             case (_) {};
           };
-          k := goalsV3.size();
+          k := goals.size();
         } else { k += 1 };
       };
 
@@ -739,10 +592,10 @@ persistent actor DBank {
       // Look up category for recording
       var cat = "Savings";
       var j = 0;
-      while (j < goalsV3.size()) {
-        if (goalsV3[j].id == goalId) {
-          cat := goalsV3[j].category;
-          j := goalsV3.size();
+      while (j < goals.size()) {
+        if (goals[j].id == goalId) {
+          cat := goals[j].category;
+          j := goals.size();
         } else { j += 1 };
       };
 
@@ -756,8 +609,8 @@ persistent actor DBank {
     var success = false;
     var goalName = "";
     let now = Time.now();
-    let oldGoals = goalsV3;
-    goalsV3 := Array.tabulate<Goal>(
+    let oldGoals = goals;
+    goals := Array.tabulate<Goal>(
       oldGoals.size(),
       func(i) {
         let g = oldGoals[i];
@@ -794,23 +647,23 @@ persistent actor DBank {
       // Determine Op
       var isEMI = false;
       var k = 0;
-      while (k < goalsV3.size()) {
-        if (goalsV3[k].id == goalId) {
-          switch (goalsV3[k].gType) {
+      while (k < goals.size()) {
+        if (goals[k].id == goalId) {
+          switch (goals[k].gType) {
             case (#EMI) { isEMI := true };
             case (_) {};
           };
-          k := goalsV3.size();
+          k := goals.size();
         } else { k += 1 };
       };
       let op = if (isEMI) "emi_withdraw" else "goal_withdraw";
 
       var cat = "Savings";
       var j = 0;
-      while (j < goalsV3.size()) {
-        if (goalsV3[j].id == goalId) {
-          cat := goalsV3[j].category;
-          j := goalsV3.size();
+      while (j < goals.size()) {
+        if (goals[j].id == goalId) {
+          cat := goals[j].category;
+          j := goals.size();
         } else { j += 1 };
       };
 
@@ -824,8 +677,8 @@ persistent actor DBank {
     var success = false;
     var goalName = "";
     let now = Time.now();
-    let oldGoals = goalsV3;
-    goalsV3 := Array.tabulate<Goal>(
+    let oldGoals = goals;
+    goals := Array.tabulate<Goal>(
       oldGoals.size(),
       func(i) {
         let g = oldGoals[i];
@@ -877,10 +730,10 @@ persistent actor DBank {
       // Find category
       var cat = "Savings";
       var j = 0;
-      while (j < goalsV3.size()) {
-        if (goalsV3[j].id == goalId) {
-          cat := goalsV3[j].category;
-          j := goalsV3.size();
+      while (j < goals.size()) {
+        if (goals[j].id == goalId) {
+          cat := goals[j].category;
+          j := goals.size();
         } else { j += 1 };
       };
 
@@ -898,8 +751,8 @@ persistent actor DBank {
     _realizeGains();
     var success = false;
     var goalName = "";
-    let oldGoals = goalsV3;
-    goalsV3 := Array.tabulate<Goal>(
+    let oldGoals = goals;
+    goals := Array.tabulate<Goal>(
       oldGoals.size(),
       func(i) {
         let g = oldGoals[i];
@@ -975,10 +828,10 @@ persistent actor DBank {
 
       var cat = "Debt";
       var j = 0;
-      while (j < goalsV3.size()) {
-        if (goalsV3[j].id == goalId) {
-          cat := goalsV3[j].category;
-          j := goalsV3.size();
+      while (j < goals.size()) {
+        if (goals[j].id == goalId) {
+          cat := goals[j].category;
+          j := goals.size();
         } else { j += 1 };
       };
 
@@ -1020,7 +873,7 @@ persistent actor DBank {
       frequency = 30 * 24 * 3600;
       penaltyRate = 0.0;
     };
-    goalsV3 := Array.append(goalsV3, [newGoal]);
+    goals := Array.append(goals, [newGoal]);
 
     if (fundAmount > 0.0) {
       _recordTransaction(switch (gType) { case (#Savings) "goal_create"; case (#EMI) "emi_setup" }, fundAmount, currentValue, name, "Savings", ["Create"]);
@@ -1031,8 +884,8 @@ persistent actor DBank {
 
   public func updateGoal(goalId : Nat, name : Text, target : Float, commitment : Float) : async Bool {
     var success = false;
-    let oldGoals = goalsV3;
-    goalsV3 := Array.tabulate<Goal>(
+    let oldGoals = goals;
+    goals := Array.tabulate<Goal>(
       oldGoals.size(),
       func(i) {
         let g = oldGoals[i];
@@ -1079,8 +932,8 @@ persistent actor DBank {
   public func debugMakeGoalDue(goalId : Nat) : async Bool {
     var success = false;
     let now = Time.now();
-    let oldGoals = goalsV3;
-    goalsV3 := Array.tabulate<Goal>(
+    let oldGoals = goals;
+    goals := Array.tabulate<Goal>(
       oldGoals.size(),
       func(i) {
         let g = oldGoals[i];
@@ -1113,9 +966,9 @@ persistent actor DBank {
     return success;
   };
 
-  public query func getGoals() : async [Goal] { return goalsV3 };
+  public query func getGoals() : async [Goal] { return goals };
   public query func getCompletedGoals() : async [CompletedGoal] {
-    return completedGoalsV3;
+    return completedGoals;
   };
 
   /**
@@ -1128,13 +981,13 @@ persistent actor DBank {
     var changes = false;
 
     // We use a local var for goals to avoid reading the changing global if we were replacing it,
-    // but here we read the *current* global goalsV3 and build a *new* array.
+    // but here we read the *current* global goals and build a *new* array.
     // The side effects (wallet update, tx recording) happen sequentially.
 
     let newGoals = Array.tabulate<Goal>(
-      goalsV3.size(),
+      goals.size(),
       func(i) {
-        let g = goalsV3[i];
+        let g = goals[i];
 
         // Conditions: Active, Has Commitment, Is Due
         // Note: We check if wallet has funds. If not, we SKIP this turn.
@@ -1194,7 +1047,7 @@ persistent actor DBank {
     );
 
     if (changes) {
-      goalsV3 := newGoals;
+      goals := newGoals;
       currentValue := wallet;
     };
   };
@@ -1235,20 +1088,20 @@ persistent actor DBank {
     } else if (bal > 1_000.0) { score += 10.0 };
 
     // 2. Goal Achievement (Max 20)
-    if (completedGoalsV3.size() >= 5) { score += 20.0 } else if (completedGoalsV3.size() >= 1) {
+    if (completedGoals.size() >= 5) { score += 20.0 } else if (completedGoals.size() >= 1) {
       score += 10.0;
     };
 
     // 3. Automation Usage (Max 20)
     var hasAuto = false;
-    for (t in txsV3.vals()) {
+    for (t in transactions.vals()) {
       if (t.category == "Automation") { hasAuto := true };
     };
     if (hasAuto) { score += 20.0 };
 
     // 4. Debt Management (Penalties)
     // If any EMI goal is "Active" but bucket < 1 month commitment (At Risk)
-    for (g in goalsV3.vals()) {
+    for (g in goals.vals()) {
       switch (g.gType) {
         case (#EMI) {
           if (g.currentAmount < g.monthlyCommitment) { score -= 5.0 };
@@ -1282,7 +1135,7 @@ persistent actor DBank {
     var hasAuto = false;
     var firstTxTime : ?Int = null;
 
-    for (t in txsV3.vals()) {
+    for (t in transactions.vals()) {
       if (firstTxTime == null) { firstTxTime := ?t.time };
       if (t.op == "deposit") { hasDeposit := true };
       if (t.op == "withdraw") { hasWithdraw := true };
@@ -1291,7 +1144,7 @@ persistent actor DBank {
 
     var savingsGoalsCompleted = 0;
     var emiGoalsCompleted = 0;
-    for (cg in completedGoalsV3.vals()) {
+    for (cg in completedGoals.vals()) {
       switch (cg.gType) {
         case (#Savings) { savingsGoalsCompleted += 1 };
         case (#EMI) { emiGoalsCompleted += 1 };
@@ -1299,7 +1152,7 @@ persistent actor DBank {
     };
 
     // Define Badges
-    add("first_step", "First Step", "Footprints", "Make your first transaction.", txsV3.size() > 0, firstTxTime);
+    add("first_step", "First Step", "Footprints", "Make your first transaction.", transactions.size() > 0, firstTxTime);
     add("saver", "Savvy Saver", "PiggyBank", "Complete a savings goal.", savingsGoalsCompleted > 0, if (savingsGoalsCompleted > 0) ?now else null); // Ideally finding exact time
     add("freedom", "Debt Destroyer", "Unlink", "Pay off a debt completely.", emiGoalsCompleted > 0, if (emiGoalsCompleted > 0) ?now else null);
     add("high_roller", "High Roller", "Diamond", "Reach a balance of ⨎10,000.", bal >= 10_000.0, ?now);
