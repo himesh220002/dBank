@@ -1,3 +1,7 @@
+// /src/dbank_frontend/src/components/TransactionHistory.jsx
+// Recent Activity Feed
+// A concise table displaying the last few transactions for quick reference on the dashboard.
+
 import React, { useState } from 'react';
 import { History, ArrowUpRight, ArrowDownRight, CreditCard, PlusCircle, Zap, ArrowRightLeft, X } from 'lucide-react';
 

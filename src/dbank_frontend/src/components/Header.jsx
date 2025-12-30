@@ -1,8 +1,20 @@
+// /src/dbank_frontend/src/components/Header.jsx
+// Application Header & Navigation
+// Standardized navigation bar across Dashboard, Investments, and History pages.
+
 import React, { useState } from 'react';
 import { LayoutDashboard, History, TrendingUp, User } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ProfileModal from './ProfileModal';
 
+/**
+ * Header Component
+ * 
+ * Orchestrates top-level navigation and system status reporting.
+ * - Dynamic route highlighting for Dashboard vs secondary pages.
+ * - Real-time system message display for transaction feedback.
+ * - Profile & Identity management portal entry.
+ */
 export function Header({ message, onExport }) {
     const location = useLocation();
     const isHome = location.pathname === '/';

@@ -1,14 +1,37 @@
+// /src/dbank_frontend/src/components/investments/AssetPurchaseModal.jsx
+
+/**
+ * AssetPurchaseModal - Execution layer for investment transactions.
+ * 
+ * CORE LOGIC:
+ * - Dual-input synchronization: Update Delta cost when Quantity changes, and vice-versa.
+ * - Real-time balance verification against the user's current Delta (Δ) hold.
+ * - Integration with PinEntryModal for secure transaction verification on the blockchain.
+ * 
+ * DEVELOPER NOTES:
+ * - Delta to INR conversion happens via `InvestmentService` to ensure consistency.
+ * - The `assetType` prop must correspond exactly to the Motoko Backend's union type tags.
+ * 
+ * FUTURE UPGRADES:
+ * - Implementing "Limit Orders" (Execute buy only when price hits target).
+ * - "Recurring Buy" setup directly from this modal.
+ * - Visual price impact estimator for large volume purchases.
+ */
+
 import React, { useState } from 'react';
 import { X, TrendingUp, TrendingDown } from 'lucide-react';
 import { InvestmentService } from '../../services/InvestmentService';
 import PinEntryModal from '../PinEntryModal';
 
 const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, loading }) => {
-    const [inputMode, setInputMode] = useState('delta'); // 'delta' or 'quantity'
+    const [inputMode, setInputMode] = useState('delta'); // 'delta' (fiat-value) or 'quantity' (asset-units)
     const [deltaAmount, setDeltaAmount] = useState('');
     const [quantity, setQuantity] = useState('');
     const [showPin, setShowPin] = useState(false);
 
+    /**
+     * Cross-calculates Quantity when user inputs preferred Delta spend.
+     */
     const handleDeltaChange = (value) => {
         setDeltaAmount(value);
         if (value && asset.price > 0) {
@@ -19,6 +42,9 @@ const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, lo
         }
     };
 
+    /**
+     * Cross-calculates Delta cost when user inputs specific Asset units.
+     */
     const handleQuantityChange = (value) => {
         setQuantity(value);
         if (value && asset.price > 0) {
@@ -32,9 +58,13 @@ const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, lo
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!deltaAmount || Number(deltaAmount) <= 0) return;
+        // Proceed to security verification before calling backend
         setShowPin(true);
     };
 
+    /**
+     * Callback from PinEntryModal. This is where the actual blockchain actor call is initiated.
+     */
     const handlePinSuccess = async () => {
         await onBuy(assetType, asset.symbol, Number(deltaAmount), asset.price);
         setShowPin(false);
@@ -45,7 +75,8 @@ const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, lo
         <>
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
                 <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 max-w-lg w-full">
-                    {/* Header */}
+
+                    {/* Header: Transaction Target Designation */}
                     <div className="flex items-start justify-between mb-6">
                         <div>
                             <div className="text-sm text-slate-500">{asset.symbol}</div>
@@ -59,7 +90,7 @@ const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, lo
                         </button>
                     </div>
 
-                    {/* Current Price */}
+                    {/* Live Market Reference Context */}
                     <div className="bg-slate-800/50 rounded-lg p-4 mb-6">
                         <div className="flex items-center justify-between">
                             <div>
@@ -75,9 +106,10 @@ const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, lo
                         </div>
                     </div>
 
-                    {/* Purchase Form */}
+                    {/* Order Configuration Form */}
                     <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* Input Mode Toggle */}
+
+                        {/* Unit Selection: Fiat vs Asset Units */}
                         <div className="flex gap-2">
                             <button
                                 type="button"
@@ -101,7 +133,7 @@ const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, lo
                             </button>
                         </div>
 
-                        {/* Input Fields */}
+                        {/* Dynamics Inputs with Label Awareness */}
                         {inputMode === 'delta' ? (
                             <div>
                                 <label className="block text-sm text-slate-400 mb-2">Delta Amount</label>
@@ -133,10 +165,13 @@ const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, lo
                                     min="0"
                                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-amber-500/50"
                                 />
+                                <div className="text-xs text-slate-500 mt-1 uppercase">
+                                    Symbol: {asset.symbol}
+                                </div>
                             </div>
                         )}
 
-                        {/* Conversion Display */}
+                        {/* Order Confirmation Preview (Real-time Calculation) */}
                         {deltaAmount && quantity && (
                             <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 space-y-2">
                                 <div className="flex justify-between text-sm">
@@ -160,25 +195,25 @@ const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, lo
                             </div>
                         )}
 
-                        {/* Insufficient Balance Warning */}
+                        {/* Dynamic Error Messaging: Solvency Check */}
                         {deltaAmount && Number(deltaAmount) > deltaBalance && (
                             <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-4">
                                 <div className="flex items-start gap-3">
                                     <div className="text-rose-400 text-2xl">⚠</div>
                                     <div>
                                         <div className="text-rose-400 font-bold text-sm mb-1">Insufficient Delta Balance</div>
-                                        <div className="text-rose-300 text-xs">
-                                            You need <span className="font-bold">{Number(deltaAmount).toLocaleString()} Δ</span> but only have <span className="font-bold">{deltaBalance.toLocaleString()} Δ</span>
+                                        <div className="text-rose-300 text-xs text-balance">
+                                            You need <span className="font-bold">{Number(deltaAmount).toLocaleString()} Δ</span> but only have <span className="font-bold">{deltaBalance.toLocaleString()} Δ</span>.
                                         </div>
                                         <div className="text-rose-300 text-xs mt-2">
-                                            💡 Go to <span className="font-bold">Token Wallet</span> tab to convert more dBank (⨎) to Delta (Δ)
+                                            💡 TIP: Convert more dBank (⨎) to Delta (Δ) in the <span className="font-bold">Token Wallet</span> tab.
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* Submit Button */}
+                        {/* Primary Action Button */}
                         <button
                             type="submit"
                             disabled={loading || !deltaAmount || Number(deltaAmount) <= 0 || Number(deltaAmount) > deltaBalance}
@@ -187,16 +222,17 @@ const AssetPurchaseModal = ({ asset, assetType, deltaBalance, onClose, onBuy, lo
                             {loading ? (
                                 <span className="flex items-center justify-center gap-2">
                                     <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                    Processing...
+                                    Authenticating...
                                 </span>
                             ) : (
-                                'Buy Asset'
+                                'Confirm Purchase'
                             )}
                         </button>
                     </form>
                 </div>
             </div>
 
+            {/* Verification Security Layer */}
             <PinEntryModal
                 isOpen={showPin}
                 onClose={() => setShowPin(false)}

@@ -1,3 +1,22 @@
+// /src/dbank_frontend/src/components/investments/AssetDetailModal.jsx
+
+/**
+ * AssetDetailModal - Detailed view for a single investment asset.
+ * 
+ * DESIGN RATIONALE:
+ * - Provides historical context via interactive Recharts.
+ * - Bridges the gap between INR prices and Delta (Δ) token costs.
+ * 
+ * DEVELOPER NOTES:
+ * - The `timeRange` state triggers a re-fetch of historical data via `InvestmentService`.
+ * - Chart colors (emerald/rose) are dynamically driven by the asset's 24h performance.
+ * 
+ * FUTURE UPGRADES:
+ * - Adding candlestick chart support for advanced traders.
+ * - Implementing technical indicators (RSI, Bollinger Bands) toggles.
+ * - Direct "Compare with..." feature to overlay another asset's performance.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { X, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
 import { InvestmentService } from '../../services/InvestmentService';
@@ -8,7 +27,7 @@ const AssetDetailModal = ({ asset, onClose, onBuyClick }) => {
     const [chartData, setChartData] = useState([]);
 
     useEffect(() => {
-        // Generate price history based on asset type and current price
+        // Fetch historical data whenever asset or timeRange changes
         async function loadHistory() {
             const history = await InvestmentService.getHistory(
                 asset.id,
@@ -27,7 +46,7 @@ const AssetDetailModal = ({ asset, onClose, onBuyClick }) => {
     return (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto overflow-x-hidden">
-                {/* Header */}
+                {/* Header: Branding and Performance Summary */}
                 <div className="flex items-start justify-between mb-6">
                     <div>
                         <div className="text-sm text-slate-500">{asset.symbol}</div>
@@ -54,7 +73,7 @@ const AssetDetailModal = ({ asset, onClose, onBuyClick }) => {
                     </button>
                 </div>
 
-                {/* Time Range Selector */}
+                {/* Historical Filter Controls */}
                 <div className="flex gap-2 mb-4">
                     {ranges.map(range => (
                         <button
@@ -70,7 +89,7 @@ const AssetDetailModal = ({ asset, onClose, onBuyClick }) => {
                     ))}
                 </div>
 
-                {/* Price Chart */}
+                {/* Charting Engine (Powered by Recharts) */}
                 <div className="bg-slate-800/50 rounded-xl p-4 mb-6">
                     <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
@@ -117,7 +136,7 @@ const AssetDetailModal = ({ asset, onClose, onBuyClick }) => {
                     </div>
                 </div>
 
-                {/* Asset Info Grid */}
+                {/* Key Metrics Breakdown */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <div className="bg-slate-800/50 rounded-lg p-4">
                         <div className="text-xs text-slate-500 mb-1">Type</div>
@@ -141,7 +160,7 @@ const AssetDetailModal = ({ asset, onClose, onBuyClick }) => {
                     </div>
                 </div>
 
-                {/* Buy Button */}
+                {/* Purchase Order Initiation */}
                 <button
                     onClick={() => {
                         onBuyClick();

@@ -1,6 +1,20 @@
 
-// InvestmentService.js - Enhanced with Realistic Fallback Data System
-// Implements statistical modeling, trend analysis, and controlled randomization
+// /src/dbank_frontend/src/services/InvestmentService.js
+
+/**
+ * InvestmentService - Central hub for asset data, historical tracking, and financial conversions.
+ * 
+ * CURRENT STATUS:
+ * - Implements a hybrid data system: real-time API primary, deterministic fallback secondary.
+ * - Handles statistical modeling (volatility, trends) for realistic chart generation.
+ * - Manages persistent graph state in localStorage for consistent UI across sessions.
+ * 
+ * PLANNED UPGRADES:
+ * - Migrating price variation logic to a dedicated backend microservice.
+ * - Implementing WebSocket support for real-time live price streaming.
+ * - Enhancing portfolio analytics with Risk/Reward (Sharpe Ratio) calculations.
+ * - Support for fractional ownership of higher-value minerals (Lithium/Copper).
+ */
 
 const API_CACHE = {
     goldSilver: { data: null, timestamp: 0 }
@@ -9,10 +23,13 @@ const API_CACHE = {
 const CACHE_DURATION = 60000; // 1 minute
 const HISTORY_STORAGE_KEY = 'investment_price_history';
 const LONG_TERM_HISTORY_KEY = 'investment_long_term_history';
-const HISTORY_DAYS = 7; // Keep last 7 days
+const HISTORY_DAYS = 7; // Keep last 7 days for rolling window calculations
 const BASE_API_URL = 'https://my-api-rose-seven.vercel.app/api';
 
-// Volatility profiles for different asset types
+/**
+ * VOLATILITY_PROFILES defines the boundary and behavior of different asset classes.
+ * Adjusting these impacts how 'real' the fallback charts look.
+ */
 const VOLATILITY_PROFILES = {
     crypto: { base: 0.05, range: [0.03, 0.12], maxDaily: 0.15 },
     currency: { base: 0.01, range: [0.003, 0.02], maxDaily: 0.03 },
@@ -21,7 +38,10 @@ const VOLATILITY_PROFILES = {
     trade: { base: 0.05, range: [0.02, 0.10], maxDaily: 0.12 }
 };
 
-// Helper: Get today's date as seed for daily price variations
+/**
+ * Generates a deterministic seed based on the date.
+ * Ensures all users see identical price movements for fallback data on any given day.
+ */
 function getDailySeed() {
     const today = new Date();
     const dateString = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
@@ -32,23 +52,26 @@ function getDailySeed() {
     return Math.abs(seed);
 }
 
-// Helper: Generate deterministic random number (0-1) from seed
+/**
+ * Deterministic PRNG from seed.
+ * Critical for keeping charts stable during refresh.
+ */
 function seededRandom(seed, index) {
     const x = Math.sin(seed + index * 1.618033) * 10000;
     return x - Math.floor(x);
 }
 
-// Helper: Get today's date string
 function getTodayDateString() {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 }
 
-// ============================================================================
-// PHASE 1: CORE INFRASTRUCTURE
-// ============================================================================
+// --- HISTORICAL DATA MANAGEMENT ---
 
-// Historical Data Storage
+/**
+ * Retrieves daily history snapshots from localStorage.
+ * Note: Future implementations should sync this with a decentralized storage solution.
+ */
 function getHistoricalPrices(assetId) {
     try {
         const data = localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -56,11 +79,15 @@ function getHistoricalPrices(assetId) {
         const allHistory = JSON.parse(data);
         return allHistory[assetId] || [];
     } catch (e) {
-        console.warn('Failed to load history:', e);
+        console.warn('InvestmentService: Failed to load local history:', e);
         return [];
     }
 }
 
+/**
+ * Persists current price as a daily snapshot.
+ * Maintains a rolling window of HISTORY_DAYS to prevent storage bloat.
+ */
 function saveHistoricalPrice(assetId, price, change, trend) {
     try {
         const data = localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -87,17 +114,20 @@ function saveHistoricalPrice(assetId, price, change, trend) {
             allHistory[assetId].push(entry);
         }
 
-        // Keep only last HISTORY_DAYS
         allHistory[assetId] = allHistory[assetId]
             .sort((a, b) => new Date(b.date) - new Date(a.date))
             .slice(0, HISTORY_DAYS);
 
         localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(allHistory));
     } catch (e) {
-        console.warn('Failed to save history:', e);
+        console.warn('InvestmentService: Failed to save price snapshot:', e);
     }
 }
 
+/**
+ * Prunes data older than the HISTORY_DAYS threshold.
+ * Runs on every service initialization to maintain healthy browser performance.
+ */
 function cleanOldHistory() {
     try {
         const data = localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -115,11 +145,13 @@ function cleanOldHistory() {
 
         localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(allHistory));
     } catch (e) {
-        console.warn('Failed to clean history:', e);
+        console.warn('InvestmentService: History cleanup failure:', e);
     }
 }
 
-// Long-term History Storage (Yearly prices and bounds)
+/**
+ * Long-term history (Years/Months) used for macro-charts.
+ */
 function getLongTermHistory(assetId) {
     try {
         const data = localStorage.getItem(LONG_TERM_HISTORY_KEY);
@@ -127,7 +159,7 @@ function getLongTermHistory(assetId) {
         const allHistory = JSON.parse(data);
         return allHistory[assetId] || null;
     } catch (e) {
-        console.warn('Failed to load long-term history:', e);
+        console.warn('InvestmentService: Long-term history load failure:', e);
         return null;
     }
 }
@@ -139,22 +171,26 @@ function saveLongTermHistory(assetId, historyData) {
         const allHistory = data ? JSON.parse(data) : {};
 
         allHistory[assetId] = historyData;
-
         localStorage.setItem(LONG_TERM_HISTORY_KEY, JSON.stringify(allHistory));
     } catch (e) {
-        console.warn('Failed to save long-term history:', e);
+        console.warn('InvestmentService: Long-term history save failure:', e);
     }
 }
 
-// Graph Data Storage (for persistent charts)
+// --- PERSISTENT CHART STATE ---
+
 const GRAPH_STORAGE_KEY = 'investment_graph_data';
 
+/**
+ * Prevents "flickering" or regenerating charts on every component mount.
+ * Storing calculated charts ensures the user has a stable visual experience.
+ */
 function getStoredGraphData() {
     try {
         const data = localStorage.getItem(GRAPH_STORAGE_KEY);
         return data ? JSON.parse(data) : {};
     } catch (e) {
-        console.warn('Failed to load graph data:', e);
+        console.warn('InvestmentService: Graph data load failure:', e);
         return {};
     }
 }
@@ -169,7 +205,7 @@ function saveGraphData(graphKey, chartData, date, isLongTerm = false) {
         };
         localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(allGraphs));
     } catch (e) {
-        console.warn('Failed to save graph data:', e);
+        console.warn('InvestmentService: Graph data save failure:', e);
     }
 }
 
@@ -179,7 +215,12 @@ function getYesterdayDateString() {
     return `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
 }
 
-// Statistical Analysis Functions
+// --- STATISTICAL ANALYSIS ENGINE ---
+
+/**
+ * Calculates standard deviation of returns.
+ * Future Use: Triggering system-wide "market crash/pump" events.
+ */
 function calculateVolatility(prices) {
     if (prices.length < 2) return 0;
 
@@ -200,10 +241,13 @@ function calculateMovingAverage(prices, window = 3) {
     return recent.reduce((sum, p) => sum + p, 0) / window;
 }
 
+/**
+ * Uses linear regression to detect if an asset is trending up, down, or sideways.
+ * High strength trends influence the generation of subsequent data points.
+ */
 function detectTrend(prices) {
     if (prices.length < 3) return { direction: 'sideways', strength: 0 };
 
-    // Calculate slope using linear regression
     const n = prices.length;
     const indices = Array.from({ length: n }, (_, i) => i);
 
@@ -222,7 +266,7 @@ function detectTrend(prices) {
         strength = 0;
     } else if (slopePercent > 0) {
         direction = 'uptrend';
-        strength = Math.min(Math.abs(slopePercent) / 2, 1); // Normalize to 0-1
+        strength = Math.min(Math.abs(slopePercent) / 2, 1);
     } else {
         direction = 'downtrend';
         strength = Math.min(Math.abs(slopePercent) / 2, 1);
@@ -231,6 +275,9 @@ function detectTrend(prices) {
     return { direction, strength, slope: slopePercent };
 }
 
+/**
+ * Normalizes price range for scaling charts.
+ */
 function getHistoricalRange(history) {
     if (history.length === 0) return null;
 
@@ -238,11 +285,14 @@ function getHistoricalRange(history) {
     return {
         min: Math.min(...prices),
         max: Math.max(...prices),
-        avg: prices.reduce((sum, p) => sum + p, 0) / prices.length
+        avg: prices.reduce((sum, p) => sum + p, 0) / history.length
     };
 }
 
-// Gaussian Noise Generator (Box-Muller transform) - Used for deterministic chart noise
+/**
+ * Gaussian Noise (Box-Muller) implementation.
+ * Ensures simulated swings look like real market candles rather than jagged noise.
+ */
 function gaussianNoise(mean = 0, stdDev = 1) {
     let u1 = 0, u2 = 0;
     while (u1 === 0) u1 = Math.random();
@@ -252,7 +302,10 @@ function gaussianNoise(mean = 0, stdDev = 1) {
     return z0 * stdDev + mean;
 }
 
-// Simplified daily price for fallbacks (remains static for the day)
+/**
+ * Fallback Price Generator.
+ * Remains static for the entire day using seeded randomness.
+ */
 function getDailyPrice(basePrice, assetId, assetType = 'crypto') {
     const history = getHistoricalPrices(assetId);
     const today = getTodayDateString();
@@ -262,7 +315,6 @@ function getDailyPrice(basePrice, assetId, assetType = 'crypto') {
         return { price: todayEntry.price, change: todayEntry.change };
     }
 
-    // GROUNDED FALLBACK: If no history, generate a deterministic daily variation based on the seed
     const dailySeed = getDailySeed();
     let assetSeed = 0;
     for (let i = 0; i < assetId.length; i++) {
@@ -275,39 +327,39 @@ function getDailyPrice(basePrice, assetId, assetType = 'crypto') {
 
     return {
         price: basePrice * (1 + dailyChange),
-        change: dailyChange * 100 // as percentage
+        change: dailyChange * 100
     };
 }
 
-
-// Clean old history on service initialization
 cleanOldHistory();
 
-// Private Helper: Fetch and extract category from centralized /assets API
+// --- CENTRALIZED ASSET API FETCHING ---
+
 async function fetchAssetCategory(categoryName) {
     try {
         const response = await fetch(`${BASE_API_URL}/assets`);
-        if (!response.ok) throw new Error('Assets API Failed');
+        if (!response.ok) throw new Error('Assets API unreachable');
         const data = await response.json();
 
-        // Find the specific category in the array of objects
         const categoryObj = data.find(c => c.name === categoryName);
-        if (!categoryObj || !categoryObj.data) throw new Error(`Category ${categoryName} not found`);
+        if (!categoryObj || !categoryObj.data) throw new Error(`Asset category not found: ${categoryName}`);
 
-        // Data can be an object or an array. Map it to an array.
         return Object.values(categoryObj.data).filter(item => item && typeof item === 'object' && item.id);
     } catch (error) {
+        console.error(`InvestmentService: Fetch error for ${categoryName}:`, error);
         throw error;
     }
 }
 
 // ============================================================================
-// ASSET FETCH FUNCTIONS (Updated to use centralized API)
+// PUBLIC INVESTMENT SERVICE API
 // ============================================================================
 
 export const InvestmentService = {
 
-    // 1. CRYPTO
+    /**
+     * CRYPTOCURRENCY: High volatility assets (BTC, ETH, etc.)
+     */
     async getCrypto() {
         try {
             const apiData = await fetchAssetCategory('cryptoPrices');
@@ -317,7 +369,7 @@ export const InvestmentService = {
                 return { ...asset, type: 'crypto' };
             });
         } catch (error) {
-            console.warn("Crypto API failed, using fallback:", error);
+            // Hardcoded baselines for offline/fallback mode
             const basePrices = { bitcoin: 7797949.28, ethereum: 325400, solana: 12800, ripple: 88, cardano: 48 };
             return [
                 { id: 'bitcoin', name: 'Bitcoin', symbol: 'BTC', ...getDailyPrice(basePrices.bitcoin, 'bitcoin', 'crypto'), type: 'crypto' },
@@ -329,7 +381,9 @@ export const InvestmentService = {
         }
     },
 
-    // 2. CURRENCIES (Forex)
+    /**
+     * FOREX: Low volatility fiat pairings (USD/INR, EUR/INR)
+     */
     async getForex() {
         try {
             const apiData = await fetchAssetCategory('forexPrices');
@@ -339,7 +393,6 @@ export const InvestmentService = {
                 return { ...asset, type: 'currency' };
             });
         } catch (error) {
-            console.warn("Forex API failed, using fallback:", error);
             const basePrices = { usd: 89.76, eur: 94.50, gbp: 112.40, cny: 12.30, brl: 17.50 };
             return [
                 { id: 'usd', name: 'US Dollar', symbol: 'USD', ...getDailyPrice(basePrices.usd, 'usd', 'currency'), type: 'currency' },
@@ -351,7 +404,6 @@ export const InvestmentService = {
         }
     },
 
-    // 3. MUTUAL FUNDS
     async getMutualFunds() {
         try {
             const apiData = await fetchAssetCategory('fundPrices');
@@ -361,7 +413,6 @@ export const InvestmentService = {
                 return { ...asset, type: 'fund' };
             });
         } catch (error) {
-            console.warn("Fund API failed, using fallback:", error);
             const basePrices = { sbi: 168.28, hdfc: 1650.20, icici: 92.40, axis: 104.20, nippon: 3450.80 };
             return [
                 { id: 'sbi', name: 'SBI Small Cap', symbol: 'SBI-SC', ...getDailyPrice(basePrices.sbi, 'sbi', 'fund'), type: 'fund' },
@@ -373,7 +424,6 @@ export const InvestmentService = {
         }
     },
 
-    // 4. MINERALS
     async getMinerals() {
         if (Date.now() - API_CACHE.goldSilver.timestamp < CACHE_DURATION && API_CACHE.goldSilver.data) {
             return API_CACHE.goldSilver.data;
@@ -390,7 +440,6 @@ export const InvestmentService = {
             API_CACHE.goldSilver = { data: formatted, timestamp: Date.now() };
             return formatted;
         } catch (apiError) {
-            console.warn("Mineral API failed, using fallback:", apiError);
             return [
                 { id: 'gold', name: 'Gold (24K)', symbol: 'Au', ...getDailyPrice(138560, 'gold', 'mineral'), unit: '10g', type: 'mineral' },
                 { id: 'silver', name: 'Silver', symbol: 'Ag', ...getDailyPrice(232100, 'silver', 'mineral'), unit: '1kg', type: 'mineral' },
@@ -401,7 +450,6 @@ export const InvestmentService = {
         }
     },
 
-    // 5. COMMODITIES
     async getCommodities() {
         try {
             const apiData = await fetchAssetCategory('commodityPrices');
@@ -411,7 +459,6 @@ export const InvestmentService = {
                 return { ...asset, type: 'trade' };
             });
         } catch (error) {
-            console.warn("Commodity API failed, using fallback:", error);
             const basePrices = { oil: 6800, gas: 356.4, steel: 52000, wheat: 2600, cotton: 58500 };
             return [
                 { id: 'oil', name: 'Crude Oil', symbol: 'OIL', ...getDailyPrice(basePrices.oil, 'oil', 'trade'), unit: 'Barrel', type: 'trade' },
@@ -423,7 +470,16 @@ export const InvestmentService = {
         }
     },
 
-    // Helper: Get Historical Data (Enhanced with direct API support and strict bounding)
+    /**
+     * CHART GENERATION: Intelligent History Synthesizer.
+     * 
+     * Prioritization Logic:
+     * 1. Check local cache (graphKey) for today's pre-calculated data.
+     * 2. Use Long-Term historical data if the range is 1Y or 5Y.
+     * 3. Utilize daily snapshots (7-day window) for recent precision.
+     * 4. Implement a "Rolling Window" from yesterday's data + current price.
+     * 5. Fallback to statistical simulation (Gaussian noise + trend progression).
+     */
     async getHistory(id, range, basePrice, type = 'generic', apiHistory = null) {
         if (apiHistory) saveLongTermHistory(id, apiHistory);
 
@@ -439,7 +495,7 @@ export const InvestmentService = {
         let finalHistory = null;
         let isHighQuality = false;
 
-        // 1. CACHE CHECK
+        // Path 1: Fresh Cache Check
         if (storedGraphs[graphKey] && storedGraphs[graphKey].date === today) {
             const isCachedLowQuality = !storedGraphs[graphKey].isLongTerm;
             if (!(isCachedLowQuality && !!longTerm)) {
@@ -448,7 +504,7 @@ export const InvestmentService = {
             }
         }
 
-        // 2. LONG-TERM DATA PATH
+        // Path 2: Long-Term Simulation (Yearly Data Points)
         if (!finalHistory && (range === '5Y' || range === '1Y') && longTerm) {
             const years = Object.keys(longTerm).filter(k => !isNaN(k)).sort();
             if (years.length > 0) {
@@ -468,7 +524,7 @@ export const InvestmentService = {
             }
         }
 
-        // 3. RECENT HISTORY PATH
+        // Path 3: Snapshot Reconstruction
         if (!finalHistory && history.length >= points) {
             finalHistory = history.slice(-points).map(h => {
                 let val = h.price;
@@ -479,7 +535,7 @@ export const InvestmentService = {
             isHighQuality = true;
         }
 
-        // 4. ROLLING WINDOW PATH
+        // Path 4: Rolling Window (Yesterday -> Today shift)
         const yesterday = getYesterdayDateString();
         const cachedYesterday = storedGraphs[graphKey];
         if (!finalHistory && cachedYesterday?.date === yesterday && !(!cachedYesterday.isLongTerm && !!longTerm)) {
@@ -492,7 +548,7 @@ export const InvestmentService = {
             isHighQuality = !!cachedYesterday.isLongTerm;
         }
 
-        // 5. SIMULATION FALLBACK
+        // Path 5: Statistical Micro-simulation (Absolute Fallback)
         if (!finalHistory) {
             const profile = VOLATILITY_PROFILES[type] || VOLATILITY_PROFILES.currency;
             const volatility = profile.base;
@@ -513,8 +569,10 @@ export const InvestmentService = {
             isHighQuality = false;
         }
 
-        // 6. MANDATORY NORMALIZATION & FINALIZE
+        // --- GRAPH FINALIZATION ---
+        // Ensuring the very last point EXACTLY matches the current live price
         finalHistory[finalHistory.length - 1].val = basePrice;
+
         const normalized = finalHistory.map((p, i) => {
             let label = '';
             if (labelFormat === 'Hour') label = `${i}h`;
@@ -531,9 +589,10 @@ export const InvestmentService = {
         return normalized;
     },
 
-    // Delta Token Conversion Helpers
+    // --- FINANCIAL CONVERSION UTILITIES ---
+
     dbankToDelta(dbankAmount) {
-        return dbankAmount * 10000;
+        return dbankAmount * 10000; // Rate: 1 ⨎ = 10,000 Δ
     },
 
     deltaToDbank(deltaAmount) {

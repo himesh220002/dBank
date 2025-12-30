@@ -1,3 +1,7 @@
+// /src/dbank_frontend/src/components/GoalDetailModal.jsx
+// Deep-Dive Goal Analytics & Management Modal
+// Provides detailed financial projections, safety zone indicators, and inline transaction controls.
+
 import React, { useState } from 'react';
 import {
     Trophy,
@@ -29,6 +33,15 @@ import {
     Cell
 } from 'recharts';
 
+/**
+ * GoalDetailModal Component
+ * 
+ * Comprehensive management interface for a single financial plan. Features:
+ * - Real-time "Wealth Trajectory" or "Path to Freedom" (EMI) chart projections.
+ * - "Green Zone" safety indicator for EMI buckets to ensure stress-free repayment.
+ * - Inline "Fast-Action" buttons with success animations for immediate funding/payment.
+ * - Editable goal parameters (Name, Target, Commitment) for dynamic planning.
+ */
 export function GoalDetailModal({ goal, onClose, onFund, onPayEMI, onWithdraw, onPayFromBucket, onUpdate, onToggleStatus }) {
     const [commitment, setCommitment] = useState(goal.monthlyCommitment);
     const [isEditing, setIsEditing] = useState(false);
@@ -44,6 +57,11 @@ export function GoalDetailModal({ goal, onClose, onFund, onPayEMI, onWithdraw, o
     const progress = isEMI ? ((goal.paidAmount + goal.currentAmount) / goal.targetAmount) * 100 : (goal.currentAmount / goal.targetAmount) * 100;
     const isAchieved = progress >= 100;
 
+    /**
+     * Inline Action Pipeline
+     * Orchestrates the verification, loading, and success states for modal transactions.
+     * Provides immediate visual feedback (Confetti/Green status) upon successful backend response.
+     */
     const handleActionSubmit = async (actionType) => {
         if (!amount || isNaN(amount) || Number(amount) <= 0) return;
         setStatus('loading');
@@ -72,6 +90,11 @@ export function GoalDetailModal({ goal, onClose, onFund, onPayEMI, onWithdraw, o
         setIsEditing(false);
     };
 
+    /**
+     * UI Helper: ActionButton
+     * A polymorphic button that transforms into an input field or a success indicator.
+     * Centralizes the look-and-feel of various goal-based transactions.
+     */
     const ActionButton = ({ type, label, icon: Icon, colorClass, bgClass, shadowClass, disabled, subtitle }) => {
         const isActive = activeAction === type;
         const isSuccess = isActive && status === 'success';

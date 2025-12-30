@@ -1,11 +1,25 @@
+// /src/dbank_frontend/src/components/PinEntryModal.jsx
+// Secure Transaction Verification Modal
+// Handles PIN-based authentication, keyboard masking, and anti-brute-force lockout logic.
+
 import React, { useState, useEffect } from 'react';
 import { Shield, Lock, AlertTriangle, Delete } from 'lucide-react';
 
-const PIN_KEY = import.meta.env.VITE_PAYMENTS_PIN; // Default for dev
+// --- Security Constants ---
+const PIN_KEY = import.meta.env.VITE_PAYMENTS_PIN;
 const MAX_ATTEMPTS = 10;
 const LOCKOUT_DURATION = 60 * 60 * 1000; // 1 Hour
 const RESET_DURATION = 2 * 60 * 1000; // 2 Minutes
 
+/**
+ * PinEntryModal Component
+ * 
+ * Provides a specialized numerical keypad for verifying financial transitions.
+ * Features:
+ * - Anti-Brute-Force: Limits attempts and enforces a 1-hour cooling-down period.
+ * - Local-Storage Persistence: Retains attempt history across page reloads.
+ * - Keyboard Support: Captures numeric and backspace keys for desktop accessibility.
+ */
 const PinEntryModal = ({ isOpen, onClose, onSuccess, amount }) => {
     if (!isOpen) return null;
 
@@ -24,7 +38,10 @@ const PinEntryModal = ({ isOpen, onClose, onSuccess, amount }) => {
         return saved ? parseInt(saved) : null;
     });
 
-    // Check Lockout Status & Auto-Reset
+    /**
+     * Lockout & Auto-Reset Monitor
+     * Synchronizes local state with localStorage to enforce security policies.
+     */
     useEffect(() => {
         if (lockedUntil) {
             if (Date.now() > lockedUntil) {

@@ -1,9 +1,21 @@
+// /src/dbank_frontend/src/pages/HistoryPage.jsx
+// Financial History & Achievements Page
+// Displays a detailed ledger of all account operations and a "Hall of Fame" for completed goals.
+
 import React, { useEffect, useState } from 'react';
 import { dbank_backend } from 'declarations/dbank_backend';
 import { Trophy, Medal, History, ArrowLeft, Download, Wallet, TrendingUp, CheckCircle2, Award, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
+/**
+ * HistoryPage Component
+ * 
+ * Provides an audit trail and achievement tracking. Highlights:
+ * - Tabbed interface for success stories (Hall of Fame) and raw ledger (Global Ledger).
+ * - Intelligent transaction mapping: converts obscure opcodes into human-readable flows.
+ * - Monthly grouping and pagination for long-term account histories.
+ */
 export function HistoryPage() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
@@ -21,6 +33,10 @@ export function HistoryPage() {
         setVisibleCount(30);
     }
 
+    /**
+     * Maps raw backend transactions into rich, styled table rows.
+     * Implements "Smart Source Tracking" to show money movement (e.g., from Main to Goal).
+     */
     function renderLedgerRows() {
         let lastMonthStr = '';
 
@@ -142,6 +158,10 @@ export function HistoryPage() {
         fetchData();
     }, []);
 
+    /**
+     * Fetches and normalizes data for the history view.
+     * Ensures transactions are sorted newest-to-oldest for immediate visibility.
+     */
     async function fetchData() {
         try {
             const [g, cg, t] = await Promise.all([

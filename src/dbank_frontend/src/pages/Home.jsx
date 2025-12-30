@@ -1,3 +1,7 @@
+// /src/dbank_frontend/src/pages/Home.jsx
+// Main Dashboard Page - dBank
+// Orchestrates balance tracking, goal management, automation, and gamification metrics.
+
 import { useEffect, useState, useRef } from 'react';
 import { dbank_backend } from 'declarations/dbank_backend';
 import { Header } from '../components/Header';
@@ -29,6 +33,15 @@ import GoalSuggestions from '../components/sidebar/GoalSuggestions';
 import HabitStreaks from '../components/sidebar/HabitStreaks';
 import { ArrowRightLeft, CalendarClock, PieChart, Activity, Calendar as CalIcon, ListTodo, ShieldAlert, AlertTriangle, Lightbulb, Flame } from 'lucide-react';
 
+/**
+ * Home Component
+ * 
+ * Functional core of the frontend dApp. Manages:
+ * - Real-time balance streaming (virtual ticking).
+ * - Goal-based financial planning lifecycle.
+ * - Local-storage based automation scheduler.
+ * - Verification flow with PIN protection.
+ */
 export function Home() {
     const [balance, setBalance] = useState(null);
     const [virtualBalance, setVirtualBalance] = useState(null);
@@ -66,8 +79,15 @@ export function Home() {
     const [showPin, setShowPin] = useState(false);
     const [pendingOperation, setPendingOperation] = useState(null); // { type: 'deposit' | 'withdraw', amount: number }
 
+    // --- Refs ---
+    // tickInterval stores the ID of the real-time balance streaming interval to prevent leaks.
     const tickInterval = useRef(null);
 
+    // --- Data Fetching & Sync ---
+    /**
+     * Synchronizes local state with the Internet Computer canister.
+     * Maps raw backend BigInts and Variants to frontend-friendly formats.
+     */
     async function fetchData() {
         try {
             const b = await dbank_backend.getCurrentValue();
@@ -162,7 +182,12 @@ export function Home() {
         return () => clearInterval(tickInterval.current);
     }, [balance, apr]);
 
-    // --- Automation Scheduler ---
+    // --- Local Automation Scheduler ---
+    /**
+     * Periodically checks for due automated tasks (deposits, EMI payments).
+     * Uses localStorage as an offline queue for scheduled actions.
+     * Note: This is a client-side convenience, not a robust backend cron.
+     */
     useEffect(() => {
         const checkAutomations = async () => {
             const saved = localStorage.getItem('dbank_schedules');
@@ -214,6 +239,10 @@ export function Home() {
         return () => clearInterval(timer);
     }, []);
 
+    // --- Core Financial Operations ---
+    /**
+     * Executes pending deposit/withdrawal after successful PIN verification.
+     */
     async function executePendingOperation() {
         if (!pendingOperation) return;
 
@@ -281,6 +310,10 @@ export function Home() {
         }
     }
 
+    /**
+     * EMI Payment Pipeline
+     * Handles source selection (Wallet vs Goal Bucket), PIN verification, and UI feedback.
+     */
     async function handlePayEMI(goalId, fromGoalBalance = false, amount = null, source = null) {
         // Find the goal to get its bucket balance and status
         const g = goals.find(x => Number(x.id) === Number(goalId));
@@ -420,6 +453,10 @@ export function Home() {
         }
     }
 
+    // --- Goal-Specific Actions ---
+    /**
+     * Funds a specific goal from the main balance.
+     */
     async function handleFundGoal(goalId, amount = null) {
         if (amount === null) {
             setTransactionModal({
@@ -582,7 +619,10 @@ export function Home() {
         } catch (e) { console.error(e); }
     }
 
-    // --- Sidebar Handlers ---
+    // --- Sidebar Utility Handlers ---
+    /**
+     * Quick Transfer facilitates rapid moving of funds between Main and Goal buckets.
+     */
     const handleQuickTransfer = async ({ source, target, amount }) => {
         if (!amount || isNaN(amount)) return;
         setLoading(true);

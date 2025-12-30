@@ -1,3 +1,7 @@
+// /src/dbank_frontend/src/pages/InvestmentsPage.jsx
+// Investment Hub - dBank
+// Manages asset trading, portfolio valuation, and the Delta token bridge system.
+
 import { useState, useEffect } from 'react';
 import { dbank_backend } from 'declarations/dbank_backend';
 import { Header } from '../components/Header';
@@ -7,8 +11,17 @@ import PortfolioDashboard from '../components/investments/PortfolioDashboard';
 import { InvestmentService } from '../services/InvestmentService';
 import { TrendingUp, Wallet, PieChart } from 'lucide-react';
 
+/**
+ * InvestmentsPage Component
+ * 
+ * Central dashboard for non-banking financial assets. Features:
+ * - Delta Token bridge: Converts dBank liquidity into tradeable investment units.
+ * - Multi-asset Marketplace: Supports Crypto, Minerals, Commodities, and Forex.
+ * - Live Portfolio Tracking: Real-time valuation based on current market prices.
+ * - Persistence Layer: Restores active tab state across session refreshes.
+ */
 export function InvestmentsPage() {
-    // Initialize tab from sessionStorage or default to 'marketplace'
+    // Session-aware tab management to maintain context during development/refreshes.
     const [activeTab, setActiveTab] = useState(() => {
         // Check if we have a saved tab from a refresh (not a navigation)
         const savedTab = sessionStorage.getItem('investmentsActiveTab');
@@ -32,6 +45,10 @@ export function InvestmentsPage() {
     const [fundPrices, setFundPrices] = useState([]);
     const [forexPrices, setForexPrices] = useState([]);
 
+    /**
+     * Aggregates financial data from backend canisters and external price oracles.
+     * Synchronizes main balance, investment wallet, and various asset categories.
+     */
     async function fetchData() {
         try {
             // Fetch main balance
@@ -121,6 +138,9 @@ export function InvestmentsPage() {
         }
     };
 
+    /**
+     * Purchase Flow: Validates Delta balance and executes decentralized asset acquisition.
+     */
     const handleBuyAsset = async (assetType, symbol, deltaAmount, currentPrice) => {
         setLoading(true);
         try {

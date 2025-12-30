@@ -1,3 +1,7 @@
+// /src/dbank_frontend/src/components/HealthScoreGauge.jsx
+// Financial Wellness Indicator
+// Visualizes the user's "Health Score" with a gradient gauge and provided insights.
+
 import React from 'react';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Activity } from 'lucide-react';

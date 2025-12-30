@@ -1,3 +1,7 @@
+// /src/dbank_frontend/src/components/GrowthChart.jsx
+// Financial Projection Visualization
+// Renders an AreaChart plotting current balance against long-term growth estimates.
+
 import React from 'react';
 import { TrendingUp } from 'lucide-react';
 import {

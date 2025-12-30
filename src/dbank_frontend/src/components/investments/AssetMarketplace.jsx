@@ -1,3 +1,24 @@
+// /src/dbank_frontend/src/components/investments/AssetMarketplace.jsx
+
+/**
+ * AssetMarketplace - Unified interface for browsing and purchasing diverse asset classes.
+ * 
+ * CORE LOGIC:
+ * - Dynamic category switching between Crypto, Minerals, Forex, etc.
+ * - Local search filtering across all selected category assets.
+ * - Sparkline caching system to optimize chart rendering within the grid.
+ * 
+ * DEVELOPER NOTES:
+ * - `sparklineCache` prevents redundant API/Simulation calls during category toggles.
+ * - Sparklines use a 1-week (1W) window for performance/visibility balance.
+ * - Asset cards support both a "Quick Buy" and a "Full Detail" modal entry.
+ * 
+ * FUTURE UPGRADES:
+ * - Implementing "Watchlist" persistence for favorite assets.
+ * - Real-time "Hot/Trending" asset badges based on 24h volatility.
+ * - Advanced sorting (Price High-Low, Gainers/Losers).
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, TrendingUp, TrendingDown } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
@@ -12,6 +33,7 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
     const [detailAsset, setDetailAsset] = useState(null);
     const [sparklineCache, setSparklineCache] = useState({});
 
+    // Memoized category mapping for clean rendering cycles
     const categories = useMemo(() => [
         { id: 'crypto', label: 'Crypto', assets: cryptoAssets },
         { id: 'minerals', label: 'Minerals', assets: mineralAssets },
@@ -26,7 +48,10 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
         asset.symbol.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Load sparkline data for visible assets
+    /**
+     * Sparkline Management: Ensures every visible asset has a mini-chart.
+     * Fires on category/asset updates and populates the local component cache.
+     */
     useEffect(() => {
         const loadSparklines = async () => {
             const newCache = {};
@@ -51,8 +76,9 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
         if (filteredAssets.length > 0) {
             loadSparklines();
         }
-    }, [category, cryptoAssets, mineralAssets, commodityAssets, fundAssets, forexAssets]); // Re-run when assets or category changes
+    }, [category, cryptoAssets, mineralAssets, commodityAssets, fundAssets, forexAssets]);
 
+    // Maps UI categories to backend-compatible asset variants (Motoko Enums)
     const getAssetTypeVariant = (categoryId) => {
         const map = {
             'crypto': { Crypto: null },
@@ -67,7 +93,7 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
     return (
         <>
             <div className="space-y-6">
-                {/* Category Tabs */}
+                {/* Navigation: Category Toggles */}
                 <div className="flex gap-2 overflow-x-auto pb-2">
                     {categories.map(cat => (
                         <button
@@ -83,7 +109,7 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
                     ))}
                 </div>
 
-                {/* Search */}
+                {/* Local Filtering Engine */}
                 <div className="relative">
                     <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
@@ -95,16 +121,16 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
                     />
                 </div>
 
-                {/* Asset Grid */}
+                {/* Dynamic Asset Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {filteredAssets.map(asset => {
                         const sparklineData = sparklineCache[`${asset.id}_1W`] || [];
 
-                        // Calculate Y-axis domain for better scaling
+                        // Chart Normalization: Ensures sparkline fills its container regardless of price magnitude
                         const values = sparklineData.map(d => d.val);
                         const minVal = values.length > 0 ? Math.min(...values) : 0;
                         const maxVal = values.length > 0 ? Math.max(...values) : 100;
-                        const padding = (maxVal - minVal) * 0.1; // 10% padding
+                        const padding = (maxVal - minVal) * 0.1;
 
                         return (
                             <div
@@ -127,7 +153,7 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
                                         </div>
                                     </div>
 
-                                    {/* Sparkline Chart with proper scaling */}
+                                    {/* Sparkline Visualization Container */}
                                     <div className="h-16 mb-3">
                                         {sparklineData.length > 0 ? (
                                             <ResponsiveContainer width="100%" height="100%">
@@ -162,6 +188,7 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
                                     </div>
                                 </div>
 
+                                {/* Order Initiation (Quick Buy) */}
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -176,6 +203,7 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
                     })}
                 </div>
 
+                {/* Empty State Result */}
                 {filteredAssets.length === 0 && (
                     <div className="text-center py-12 text-slate-500">
                         No assets found matching "{searchTerm}"
@@ -183,7 +211,7 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
                 )}
             </div>
 
-            {/* Detail Modal */}
+            {/* In-depth Asset Review Modal */}
             {detailAsset && (
                 <AssetDetailModal
                     asset={detailAsset}
@@ -192,7 +220,7 @@ const AssetMarketplace = ({ cryptoAssets, mineralAssets, commodityAssets, fundAs
                 />
             )}
 
-            {/* Purchase Modal */}
+            {/* Direct Purchase Transaction Modal */}
             {selectedAsset && (
                 <AssetPurchaseModal
                     asset={selectedAsset}

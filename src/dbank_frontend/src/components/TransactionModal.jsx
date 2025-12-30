@@ -1,3 +1,7 @@
+// /src/dbank_frontend/src/components/TransactionModal.jsx
+// Multi-Action Financial Verification Modal
+// A unified interface for funding, withdrawing, and deleting goals with state-driven feedback.
+
 import React, { useState, useEffect } from 'react';
 import { X, Check, Wallet, PiggyBank } from 'lucide-react';
 

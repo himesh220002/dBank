@@ -1,6 +1,19 @@
+// /src/dbank_frontend/src/components/FinancialPlans.jsx
+// Financial Lifecycle Component
+// Handles the display, creation, and management of savings goals and EMI debts.
+
 import React, { useState } from 'react';
 import { Target, Settings2, Plus, Trophy, PartyPopper as Party, Trash2, CheckCircle2, Lock, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 
+/**
+ * FinancialPlans Component
+ * 
+ * Main interface for goal-based banking. Includes:
+ * - Reactive goal grid with progress-based styling and animations.
+ * - Dynamic form for establishing newSavings/EMI plans.
+ * - "Achieved Goals" archive with cumulative target tracking.
+ * - Manage mode for administrative actions (deletion, status toggling).
+ */
 export function FinancialPlans({
     goals,
     completedGoals,
@@ -25,6 +38,11 @@ export function FinancialPlans({
     const [goalInitialFund, setGoalInitialFund] = useState('');
     const [goalAutoPay, setGoalAutoPay] = useState(true);
 
+    /**
+     * Goal Creation Logic
+     * Normalizes dates and propagates new goal data to the backend.
+     * Default: If no due date is provided, sets a 10-year long-term horizon.
+     */
     const handleCreate = () => {
         // Handle Optional Date: Default to 10 years from now if not set
         let finalDate = goalDueDate;
@@ -238,6 +256,11 @@ export function FinancialPlans({
                 )}
             </div>
 
+            {/* 
+                Achieved Goals Section
+                Displays a collapsible history of successfully met financial targets.
+                Calculates total cumulative value of all fulfilled legacy plans.
+            */}
             {
                 completedGoals.length > 0 && (
                     <div className="mt-12 pt-8 border-t border-slate-800">
