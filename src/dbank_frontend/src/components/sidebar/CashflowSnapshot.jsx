@@ -16,6 +16,8 @@ const CashflowSnapshot = ({ transactions = [], balance = 0, goals = [], emis = [
         let inflow = 0;
         let outflow = 0;
         let totalEMIPaidOut = 0;
+        let totalDeltaPurchased = 0;
+        let totalDeltaSold = 0;
 
         safeTxs.forEach(tx => {
             // Safety check: ensure tx.op exists and is a string
@@ -30,14 +32,22 @@ const CashflowSnapshot = ({ transactions = [], balance = 0, goals = [], emis = [
                 totalEMIPaidOut += amt;
             }
 
+            // Track Delta bridge flows (investments)
+            if (op === 'buy_delta') {
+                totalDeltaPurchased += amt;
+            }
+            if (op === 'sell_delta') {
+                totalDeltaSold += amt;
+            }
+
             // This month's cashflow
             if (txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear) {
                 // INFLOW to Main
-                if (op.includes('deposit') || op.includes('goal_withdraw') || op.includes('emi_withdraw') || op.includes('income')) {
+                if (op.includes('deposit') || op.includes('goal_withdraw') || op.includes('emi_withdraw') || op.includes('income') || op === 'sell_delta') {
                     inflow += amt;
                 }
-                // OUTFLOW from Main (includes goal funding, EMI funding, and EMI payments from wallet)
-                else if (op.includes('withdraw') || op.includes('goal_fund') || op.includes('emi_fund') || op === 'emi_payment_wallet' || op.includes('spend')) {
+                // OUTFLOW from Main (includes goal funding, EMI funding, Delta bridge, and EMI payments from wallet)
+                else if (op.includes('withdraw') || op.includes('goal_fund') || op.includes('emi_fund') || op === 'emi_payment_wallet' || op.includes('spend') || op === 'buy_delta') {
                     // Exclude goal withdrawals from outflow (they're already counted as inflow)
                     if (!op.includes('goal_withdraw') && !op.includes('emi_withdraw')) {
                         outflow += amt;
@@ -62,6 +72,8 @@ const CashflowSnapshot = ({ transactions = [], balance = 0, goals = [], emis = [
             totalSystem,
             startingBalance,
             totalEMIPaidOut,
+            totalDeltaPurchased,
+            totalDeltaSold,
             goalsTotal,
             emiBucketTotal,
             safeBalance
@@ -138,15 +150,29 @@ const CashflowSnapshot = ({ transactions = [], balance = 0, goals = [], emis = [
             {/* Additional Metrics */}
             <div className="grid grid-cols-2 gap-2 text-[10px]">
                 <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
+                    <div className="flex items-center gap-1 text-slate-500 mb-1">
+                        <TrendingUp size={10} className="text-indigo-400" />
+                        <span>Delta Bought</span>
+                    </div>
+                    <div className="text-white font-bold">${stats.totalDeltaPurchased.toFixed(0)}</div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
+                    <div className="flex items-center gap-1 text-slate-500 mb-1">
+                        <TrendingDown size={10} className="text-emerald-400" />
+                        <span>Delta Sold</span>
+                    </div>
+                    <div className="text-white font-bold">${stats.totalDeltaSold.toFixed(0)}</div>
+                </div>
+                <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
                     <div className="text-slate-500 mb-1">Month Start</div>
-                    <div className="text-white font-bold">${stats.startingBalance.toFixed(2)}</div>
+                    <div className="text-white font-bold">${stats.startingBalance.toFixed(0)}</div>
                 </div>
                 <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
                     <div className="flex items-center gap-1 text-slate-500 mb-1">
                         <Send size={10} />
                         <span>EMI Paid Out</span>
                     </div>
-                    <div className="text-rose-400 font-bold">${stats.totalEMIPaidOut.toFixed(2)}</div>
+                    <div className="text-rose-400 font-bold">${stats.totalEMIPaidOut.toFixed(0)}</div>
                 </div>
             </div>
         </div>

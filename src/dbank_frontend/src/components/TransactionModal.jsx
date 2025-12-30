@@ -194,8 +194,8 @@ export function TransactionModal({ isOpen, onClose, title, type, onConfirm, load
             </div>
             <style>{`
         @keyframes progress {
-          0% { width: 100%; }
-          100% { width: 0%; }
+          0% { width: 0%; }
+          100% { width: 100%; }
         }
       `}</style>
         </div >
