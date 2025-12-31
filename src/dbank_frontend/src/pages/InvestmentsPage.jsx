@@ -3,7 +3,7 @@
 // Manages asset trading, portfolio valuation, and the Delta token bridge system.
 
 import { useState, useEffect } from 'react';
-import { dbank_backend } from 'declarations/dbank_backend';
+import { dbank_backend } from '../services/backend';
 import { Header } from '../components/Header';
 import TokenWalletCard from '../components/investments/TokenWalletCard';
 import AssetMarketplace from '../components/investments/AssetMarketplace';

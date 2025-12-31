@@ -3,7 +3,7 @@
 // Orchestrates balance tracking, goal management, automation, and gamification metrics.
 
 import { useEffect, useState, useRef } from 'react';
-import { dbank_backend } from 'declarations/dbank_backend';
+import { dbank_backend } from '../services/backend';
 import { Header } from '../components/Header';
 import { BalanceCard } from '../components/BalanceCard';
 import { OperationsCard } from '../components/OperationsCard';

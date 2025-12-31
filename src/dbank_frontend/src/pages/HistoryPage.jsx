@@ -3,7 +3,7 @@
 // Displays a detailed ledger of all account operations and a "Hall of Fame" for completed goals.
 
 import React, { useEffect, useState } from 'react';
-import { dbank_backend } from 'declarations/dbank_backend';
+import { dbank_backend } from '../services/backend';
 import { Trophy, Medal, History, ArrowLeft, Download, Wallet, TrendingUp, CheckCircle2, Award, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';

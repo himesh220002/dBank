@@ -25,3 +25,6 @@ dist/
 .env
 
 .mops
+
+# Log files and miscellaneous
+icpconversioncli.text
